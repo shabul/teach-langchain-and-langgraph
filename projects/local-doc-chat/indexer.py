@@ -1,30 +1,51 @@
 """
-Document indexer: load files → split → embed locally → persist to Chroma.
+Document indexer: load files → split → embed → persist to Chroma.
 
-Uses HuggingFaceEmbeddings (sentence-transformers) so nothing leaves the machine.
+Embedding strategy (fastest available wins):
+  1. Google text-embedding-004  — if GOOGLE_API_KEY is set (API call, no local model, instant startup)
+  2. HuggingFace all-MiniLM-L6-v2 — fully local fallback (loads PyTorch, slower to start)
 
-pip install sentence-transformers langchain-huggingface langchain-chroma
+NOTE: switching embedding backends on an existing index requires --reindex,
+      because the two models produce incompatible vector spaces.
 """
 from __future__ import annotations
 
+import os
 import pathlib
-from typing import Optional
 
+from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_community.document_loaders import TextLoader
 from langchain_core.documents import Document
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.embeddings import Embeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 EXTENSIONS = {".py", ".md", ".txt", ".rst"}
-CHUNK_SIZE = 500      # ~375 tokens — fits 3 chunks comfortably in 11k context
+CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
-EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 DEFAULT_PERSIST = "./chroma_db"
 
 
-def _make_embeddings() -> HuggingFaceEmbeddings:
-    return HuggingFaceEmbeddings(model_name=EMBED_MODEL)
+def _make_embeddings() -> tuple[Embeddings, str]:
+    """Return (embeddings, label). Prefers Google to avoid local model load time."""
+    load_dotenv()
+    google_key = os.getenv("GOOGLE_API_KEY", "").strip()
+
+    if google_key:
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        return (
+            GoogleGenerativeAIEmbeddings(
+                model="models/text-embedding-004",
+                google_api_key=google_key,
+            ),
+            "Google text-embedding-004",
+        )
+
+    # Local fallback — loads PyTorch + ~90 MB model on first use
+    from langchain_huggingface import HuggingFaceEmbeddings
+    return (
+        HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2"),
+        "HuggingFace all-MiniLM-L6-v2 (local)",
+    )
 
 
 def _load_files(dir_path: str) -> list[Document]:
@@ -40,7 +61,7 @@ def _load_files(dir_path: str) -> list[Document]:
                     metadata={"source": rel, "file_type": path.suffix.lstrip(".")},
                 ))
             except Exception:
-                pass  # skip unreadable files
+                pass
     return docs
 
 
@@ -52,25 +73,26 @@ def index_directory(
     """Load, split, embed, and persist documents from dir_path."""
     persist_path = pathlib.Path(persist_dir)
 
-    if persist_path.exists() and not force_reindex:
-        print(f"Chroma DB already exists at '{persist_dir}'. Use --reindex to rebuild.")
-        return load_vectorstore(persist_dir)
+    embeddings, embed_label = _make_embeddings()
+    print(f"Embeddings: {embed_label}")
 
-    print(f"Scanning '{dir_path}' for {', '.join(EXTENSIONS)} files...")
+    if persist_path.exists() and not force_reindex:
+        print(f"Index already exists at '{persist_dir}' — loading. (Use --reindex to rebuild.)")
+        return Chroma(persist_directory=persist_dir, embedding_function=embeddings)
+
+    print(f"Scanning '{dir_path}' for {', '.join(sorted(EXTENSIONS))} files...")
     raw_docs = _load_files(dir_path)
     if not raw_docs:
         raise ValueError(f"No supported files found in '{dir_path}'.")
 
     print(f"  Loaded {len(raw_docs)} files. Splitting into chunks...")
-    splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
-    chunks = splitter.split_documents(raw_docs)
-    print(f"  {len(chunks)} chunks. Embedding with '{EMBED_MODEL}' (first run downloads ~90 MB)...")
+    chunks = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
+    ).split_documents(raw_docs)
 
-    embeddings = _make_embeddings()
+    print(f"  {len(chunks)} chunks. Embedding...")
     vectorstore = Chroma.from_documents(
-        chunks,
-        embedding=embeddings,
-        persist_directory=persist_dir,
+        chunks, embedding=embeddings, persist_directory=persist_dir
     )
     print(f"  Done. Index saved to '{persist_dir}'.")
     return vectorstore
@@ -82,4 +104,5 @@ def load_vectorstore(persist_dir: str = DEFAULT_PERSIST) -> Chroma:
         raise FileNotFoundError(
             f"No Chroma DB at '{persist_dir}'. Run with --reindex first."
         )
-    return Chroma(persist_directory=persist_dir, embedding_function=_make_embeddings())
+    embeddings, _ = _make_embeddings()
+    return Chroma(persist_directory=persist_dir, embedding_function=embeddings)
