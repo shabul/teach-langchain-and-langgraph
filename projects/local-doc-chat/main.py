@@ -47,8 +47,8 @@ def get_llm(args: argparse.Namespace) -> tuple[BaseChatModel, str]:
     """
     Return (llm, description) using the best available backend:
       1. LM Studio (local, no key needed)
-      2. OpenAI   (OPENAI_API_KEY in .env)
-      3. Anthropic (ANTHROPIC_API_KEY in .env)
+      2. OpenAI  (OPENAI_API_KEY in .env)
+      3. Google  (GOOGLE_API_KEY in .env  →  gemini-2.0-flash)
     Exits with a clear message if none are available.
     """
     # ── 1. Try local model ──
@@ -60,15 +60,18 @@ def get_llm(args: argparse.Namespace) -> tuple[BaseChatModel, str]:
     load_dotenv()
 
     openai_key = os.getenv("OPENAI_API_KEY", "").strip()
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    google_key  = os.getenv("GOOGLE_API_KEY", "").strip()
 
     if openai_key:
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(model="gpt-4o-mini", api_key=openai_key), "gpt-4o-mini (OpenAI cloud)"
 
-    if anthropic_key:
-        from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(model="claude-haiku-4-5-20251001", api_key=anthropic_key), "claude-haiku (Anthropic cloud)"
+    if google_key:
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        return (
+            ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=google_key),
+            "gemini-2.0-flash (Google cloud)",
+        )
 
     # ── 3. Nothing available ──
     print("\n[error] No LLM available.")
@@ -77,8 +80,8 @@ def get_llm(args: argparse.Namespace) -> tuple[BaseChatModel, str]:
     print("  Options:")
     print("   A) Start LM Studio, load a model, enable the REST API server — then rerun.")
     print("   B) Add a key to .env:")
-    print("        OPENAI_API_KEY=sk-...")
-    print("        ANTHROPIC_API_KEY=sk-ant-...")
+    print("        GOOGLE_API_KEY=AIza...   (get it from aistudio.google.com)")
+    print("        OPENAI_API_KEY=sk-...    (optional alternative)")
     print("      Then rerun:  ./start.sh --dir <your-dir>")
     sys.exit(1)
 

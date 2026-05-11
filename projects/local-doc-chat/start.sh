@@ -50,8 +50,8 @@ if [ "$LM_AVAILABLE" = false ]; then
     echo "    # or: code .env  |  vim .env  |  open -e .env"
     echo ""
     echo "  Uncomment ONE of these lines and fill in your key:"
+    echo "    GOOGLE_API_KEY=AIza...   # aistudio.google.com/apikey"
     echo "    OPENAI_API_KEY=sk-..."
-    echo "    ANTHROPIC_API_KEY=sk-ant-..."
     echo ""
     echo "  Then rerun:  ./start.sh $*"
     exit 0
@@ -60,7 +60,7 @@ if [ "$LM_AVAILABLE" = false ]; then
   # ── .env exists — check whether a key is actually set ──
   HAS_KEY=false
   if grep -qE "^OPENAI_API_KEY=.+" .env 2>/dev/null || \
-     grep -qE "^ANTHROPIC_API_KEY=.+" .env 2>/dev/null; then
+     grep -qE "^GOOGLE_API_KEY=.+" .env 2>/dev/null; then
     HAS_KEY=true
   fi
 
@@ -69,8 +69,8 @@ if [ "$LM_AVAILABLE" = false ]; then
     echo "  .env exists but no API key is set."
     echo ""
     echo "  Open .env and uncomment + fill in one of:"
+    echo "    GOOGLE_API_KEY=AIza...   # aistudio.google.com/apikey"
     echo "    OPENAI_API_KEY=sk-..."
-    echo "    ANTHROPIC_API_KEY=sk-ant-..."
     echo ""
     echo "  Then rerun:  ./start.sh $*"
     exit 0
