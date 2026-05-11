@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import shutil
 
 from dotenv import load_dotenv
 from langchain_chroma import Chroma
@@ -24,6 +25,13 @@ CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 DEFAULT_PERSIST = "./chroma_db"
 
+# Directories that are never worth indexing
+SKIP_DIRS = {
+    ".venv", "venv", ".env", "__pycache__", ".git", ".hg", ".svn",
+    "node_modules", ".tox", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+    "chroma_db", "dist", "build", ".eggs", "site-packages",
+}
+
 
 def _make_embeddings() -> tuple[Embeddings, str]:
     """Return (embeddings, label). Prefers Google to avoid local model load time."""
@@ -34,10 +42,10 @@ def _make_embeddings() -> tuple[Embeddings, str]:
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
         return (
             GoogleGenerativeAIEmbeddings(
-                model="models/text-embedding-004",
+                model="models/gemini-embedding-001",
                 google_api_key=google_key,
             ),
-            "Google text-embedding-004",
+            "Google gemini-embedding-001",
         )
 
     # Local fallback — loads PyTorch + ~90 MB model on first use
@@ -52,6 +60,9 @@ def _load_files(dir_path: str) -> list[Document]:
     root = pathlib.Path(dir_path).expanduser().resolve()
     docs: list[Document] = []
     for path in sorted(root.rglob("*")):
+        # Skip any path whose ancestors include a blacklisted directory name
+        if any(part in SKIP_DIRS for part in path.parts):
+            continue
         if path.is_file() and path.suffix in EXTENSIONS:
             try:
                 text = path.read_text(encoding="utf-8", errors="ignore")
@@ -80,6 +91,9 @@ def index_directory(
         print(f"Index already exists at '{persist_dir}' — loading. (Use --reindex to rebuild.)")
         return Chroma(persist_directory=persist_dir, embedding_function=embeddings)
 
+    if persist_path.exists() and force_reindex:
+        shutil.rmtree(persist_path)
+
     print(f"Scanning '{dir_path}' for {', '.join(sorted(EXTENSIONS))} files...")
     raw_docs = _load_files(dir_path)
     if not raw_docs:
@@ -90,6 +104,7 @@ def index_directory(
         chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
     ).split_documents(raw_docs)
 
+    chunks = [c for c in chunks if c.page_content.strip()]
     print(f"  {len(chunks)} chunks. Embedding...")
     vectorstore = Chroma.from_documents(
         chunks, embedding=embeddings, persist_directory=persist_dir
