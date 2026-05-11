@@ -1,5 +1,7 @@
 .env
 chroma_db/
+projects/local-doc-chat/my-docs/*
+!projects/local-doc-chat/my-docs/README.md
 __pycache__/
 *.pyc
 .venv/

@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # start.sh — set up and launch the local-doc-chat
 #
-# First run:   ./start.sh --dir ../.. --reindex
-# Resume:      ./start.sh --dir ../..
-# Custom:      ./start.sh --dir ~/my-notes --session notes --reindex
+# Drop your files into my-docs/, then:
 #
-# All extra args are forwarded to main.py
+#   First run / after adding files:   ./start.sh --reindex
+#   Resume existing session:          ./start.sh
+#   Different folder:                 ./start.sh --dir ~/my-notes --reindex
+#   Named session:                    ./start.sh --session work
+#
+# All extra args are forwarded to main.py (default --dir is ./my-docs)
 
 set -euo pipefail
 

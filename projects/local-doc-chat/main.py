@@ -92,7 +92,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Chat with your local docs/code via LangGraph RAG"
     )
-    p.add_argument("--dir", required=True, help="Directory to index")
+    p.add_argument("--dir", default="./my-docs", help="Directory to index (default: ./my-docs)")
     p.add_argument("--session", default="default", help="Session/thread ID (for checkpointing)")
     p.add_argument("--reindex", action="store_true", help="Force re-embedding of all files")
     p.add_argument("--model", default="openai/gpt-oss-20b", help="LM Studio model name")

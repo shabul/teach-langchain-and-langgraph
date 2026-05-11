@@ -16,6 +16,21 @@ from langgraph.graph.message import add_messages
 
 from lm_studio_chat import ChatLMStudio
 
+
+def _text(content) -> str:
+    """Normalise LLM response content to a plain string.
+
+    Gemini (and some other models) return content as a list of typed parts
+    e.g. [{"type": "text", "text": "..."}] instead of a plain str.
+    """
+    if isinstance(content, list):
+        return "".join(
+            p.get("text", "") if isinstance(p, dict) else str(p)
+            for p in content
+        )
+    return str(content)
+
+
 SYSTEM_TEMPLATE = """\
 You are a helpful assistant that answers questions about a local codebase or document set.
 Use ONLY the context below to answer. If the answer is not in the context, say so clearly.
@@ -41,7 +56,7 @@ def _trim(messages: list[BaseMessage]) -> list[BaseMessage]:
 
 def make_graph(retriever: VectorStoreRetriever, llm: ChatLMStudio):
     def rag(state: State) -> dict:
-        question = state["messages"][-1].content
+        question = _text(state["messages"][-1].content)
 
         # Retrieve relevant chunks
         docs = retriever.invoke(question)
@@ -55,12 +70,12 @@ def make_graph(retriever: VectorStoreRetriever, llm: ChatLMStudio):
         trimmed = _trim(state["messages"])
         response = llm.invoke([system] + trimmed)
 
-        # Append source citations to the response
+        # Normalise to str (Gemini can return a list of content parts)
+        answer = _text(response.content)
         if sources:
-            citation = "\n\n> **Sources:** " + ", ".join(f"`{s}`" for s in sources)
-            response = AIMessage(content=response.content + citation)
+            answer += "\n\n> **Sources:** " + ", ".join(f"`{s}`" for s in sources)
 
-        return {"messages": [response]}
+        return {"messages": [AIMessage(content=answer)]}
 
     graph = StateGraph(State)
     graph.add_node("rag", rag)
