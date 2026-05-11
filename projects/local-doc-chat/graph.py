@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Annotated, TypedDict
 
+import pathlib
+
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 from langchain_core.vectorstores import VectorStoreRetriever
 from langgraph.checkpoint.memory import MemorySaver
@@ -32,9 +34,10 @@ def _text(content) -> str:
 
 
 SYSTEM_TEMPLATE = """\
-You are a helpful assistant that answers questions about a local codebase or document set.
-Use ONLY the context below to answer. If the answer is not in the context, say so clearly.
+You are a helpful assistant that answers questions about a set of documents.
+Use the context below to answer. If the answer is not in the context, say so clearly.
 Be concise. Do not repeat the context back verbatim.
+For greetings or small-talk, respond naturally without referencing the documents.
 
 --- CONTEXT ---
 {context}
@@ -61,7 +64,8 @@ def make_graph(retriever: VectorStoreRetriever, llm: ChatLMStudio):
         # Retrieve relevant chunks
         docs = retriever.invoke(question)
         context = "\n\n".join(d.page_content for d in docs)
-        sources = sorted({d.metadata.get("source", "unknown") for d in docs})
+        # Show only the filename, not the full path
+        sources = sorted({pathlib.Path(d.metadata.get("source", "")).name for d in docs if d.metadata.get("source")})
 
         # Build prompt: inject retrieved context into system message
         system = SystemMessage(content=SYSTEM_TEMPLATE.format(context=context))
