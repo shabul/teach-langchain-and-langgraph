@@ -1,0 +1,19 @@
+[project]
+name = "local-doc-chat"
+version = "0.1.0"
+description = "Local RAG chatbot — LM Studio + LangGraph + Chroma, no cloud needed"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=0.3",
+    "langgraph>=0.2",
+    "langchain-chroma>=0.1",
+    "langchain-huggingface>=0.1",
+    "langchain-community>=0.3",
+    "langchain-text-splitters>=0.3",
+    "sentence-transformers>=3.0",
+    "requests>=2.31",
+    "python-dotenv>=1.0",
+]
+
+[tool.uv]
+dev-dependencies = []

@@ -4,29 +4,31 @@ Ask questions about any folder of files using a locally hosted LLM. Nothing leav
 
 **Stack:** LM Studio → custom `BaseChatModel` → LangChain RAG → LangGraph + checkpointing → local Chroma + HuggingFace embeddings
 
-## Setup
+## Setup & Usage
+
+`start.sh` handles everything: installs `uv` if missing, creates the virtualenv, syncs deps, checks LM Studio is up, then launches the chat.
 
 ```bash
-pip install langchain langgraph langchain-chroma langchain-huggingface \
-            langchain-community sentence-transformers requests
-```
+# First run — index the repo and start chatting
+./start.sh --dir ../.. --reindex
 
-Make sure LM Studio is running with a model loaded and the REST API server active (`localhost:1234`).
-
-## Usage
-
-```bash
-# First run — index files, then chat
-python main.py --dir ../..  --reindex
-
-# Resume an existing session (no re-embedding)
-python main.py --dir ../..
+# Resume (no re-indexing)
+./start.sh --dir ../..
 
 # Custom session name (isolates conversation history)
-python main.py --dir ~/my-notes --session notes --reindex
+./start.sh --dir ~/my-notes --session notes --reindex
 
-# Adjust retrieval count and model
-python main.py --dir /path/to/code -k 5 --model openai/gpt-oss-20b
+# Adjust retrieval count or model
+./start.sh --dir /path/to/code -k 5 --model openai/gpt-oss-20b
+```
+
+Make sure LM Studio is running with a model loaded and the REST API server active on `localhost:1234`.
+
+### Manual setup (if you prefer)
+
+```bash
+uv sync          # create .venv and install deps
+uv run python main.py --dir ../.. --reindex
 ```
 
 ## What each file does
