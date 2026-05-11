@@ -3,27 +3,29 @@ Local Private Doc/Code Chat — CLI entry point.
 
 Usage:
   # First run — index the repo and start chatting
-  python main.py --dir ../.. --reindex
+  ./start.sh --dir ../.. --reindex
 
   # Subsequent runs — load existing index, resume session
-  python main.py --dir ../..
+  ./start.sh --dir ../..
 
-  # Different directory, named session
-  python main.py --dir ~/my-notes --session notes --reindex
-
-  # Point at a single project folder
-  python main.py --dir /path/to/my-project --session myproject
+  # Custom session and directory
+  ./start.sh --dir ~/my-notes --session notes --reindex
 
 Commands during chat:
   /quit or /exit  — exit
-  /sources        — show indexed source count
+  /sources        — show chunk count in index
   /session        — show current session/thread ID
+  /model          — show which LLM is active
 """
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
+import requests
+from dotenv import load_dotenv
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 
 from graph import make_graph
@@ -31,9 +33,61 @@ from indexer import index_directory, load_vectorstore
 from lm_studio_chat import ChatLMStudio
 
 
+# ── LLM detection ─────────────────────────────────────────────────────────────
+
+def _lm_studio_up(base_url: str) -> bool:
+    try:
+        r = requests.get(f"{base_url}/api/v1/models", timeout=2)
+        return r.ok
+    except Exception:
+        return False
+
+
+def get_llm(args: argparse.Namespace) -> tuple[BaseChatModel, str]:
+    """
+    Return (llm, description) using the best available backend:
+      1. LM Studio (local, no key needed)
+      2. OpenAI   (OPENAI_API_KEY in .env)
+      3. Anthropic (ANTHROPIC_API_KEY in .env)
+    Exits with a clear message if none are available.
+    """
+    # ── 1. Try local model ──
+    if _lm_studio_up(args.base_url):
+        llm = ChatLMStudio(model=args.model, base_url=args.base_url)
+        return llm, f"{args.model} (local via LM Studio @ {args.base_url})"
+
+    # ── 2. Load .env for cloud keys ──
+    load_dotenv()
+
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+
+    if openai_key:
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(model="gpt-4o-mini", api_key=openai_key), "gpt-4o-mini (OpenAI cloud)"
+
+    if anthropic_key:
+        from langchain_anthropic import ChatAnthropic
+        return ChatAnthropic(model="claude-haiku-4-5-20251001", api_key=anthropic_key), "claude-haiku (Anthropic cloud)"
+
+    # ── 3. Nothing available ──
+    print("\n[error] No LLM available.")
+    print("  LM Studio is not running AND no API key found in .env")
+    print()
+    print("  Options:")
+    print("   A) Start LM Studio, load a model, enable the REST API server — then rerun.")
+    print("   B) Add a key to .env:")
+    print("        OPENAI_API_KEY=sk-...")
+    print("        ANTHROPIC_API_KEY=sk-ant-...")
+    print("      Then rerun:  ./start.sh --dir <your-dir>")
+    sys.exit(1)
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
+
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        description="Chat with your local docs/code via LM Studio + LangGraph RAG"
+        description="Chat with your local docs/code via LangGraph RAG"
     )
     p.add_argument("--dir", required=True, help="Directory to index")
     p.add_argument("--session", default="default", help="Session/thread ID (for checkpointing)")
@@ -47,32 +101,33 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    # --- Build index ---
     print(f"\n{'='*55}")
-    print("  Local Doc Chat  |  LM Studio + LangGraph + Chroma")
+    print("  Local Doc Chat  |  LangGraph + Chroma RAG")
     print(f"{'='*55}")
 
+    # --- Build index ---
     try:
         vectorstore = index_directory(args.dir, force_reindex=args.reindex)
-    except FileNotFoundError as e:
+    except (FileNotFoundError, ValueError) as e:
         print(f"[error] {e}")
         sys.exit(1)
 
     retriever = vectorstore.as_retriever(search_kwargs={"k": args.k})
 
-    # --- Build LLM + graph ---
-    llm = ChatLMStudio(model=args.model, base_url=args.base_url)
+    # --- Pick LLM (local or cloud fallback) ---
+    llm, llm_label = get_llm(args)
     app = make_graph(retriever, llm)
 
     config = {"configurable": {"thread_id": args.session}}
 
-    # --- Chat loop ---
-    print(f"\nModel : {args.model} @ {args.base_url}")
-    print(f"Index : {args.dir}  (k={args.k})")
-    print(f"Session: '{args.session}'  (history saved in-process via MemorySaver)")
-    print("\nType your question. Commands: /quit  /sources  /session")
+    # --- Banner ---
+    print(f"\nModel  : {llm_label}")
+    print(f"Index  : {args.dir}  (k={args.k})")
+    print(f"Session: '{args.session}'")
+    print("\nType your question. Commands: /quit  /sources  /session  /model")
     print("-" * 55)
 
+    # --- Chat loop ---
     while True:
         try:
             user_input = input("\nYou: ").strip()
@@ -96,16 +151,18 @@ def main() -> None:
             print(f"[info] session = '{args.session}'")
             continue
 
+        if user_input == "/model":
+            print(f"[info] model = {llm_label}")
+            continue
+
         try:
             result = app.invoke(
                 {"messages": [HumanMessage(content=user_input)]},
                 config=config,
             )
-            answer = result["messages"][-1].content
-            print(f"\nAssistant: {answer}")
+            print(f"\nAssistant: {result['messages'][-1].content}")
         except Exception as e:
             print(f"\n[error] {e}")
-            print("Is LM Studio running? Check that the server is active on", args.base_url)
 
 
 if __name__ == "__main__":

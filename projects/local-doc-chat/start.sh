@@ -26,13 +26,57 @@ echo "uv $(uv --version)"
 echo "Syncing dependencies..."
 uv sync --quiet
 
-# ── 3. Check LM Studio is reachable ───────────────────────────────────────────
+# ── 3. Check LM Studio; set up cloud fallback if needed ───────────────────────
 BASE_URL="${LM_STUDIO_URL:-http://localhost:1234}"
-if ! curl -sf --max-time 2 "${BASE_URL}/api/v1/models" -o /dev/null 2>/dev/null; then
+LM_AVAILABLE=false
+
+if curl -sf --max-time 2 "${BASE_URL}/api/v1/models" -o /dev/null 2>/dev/null; then
+  LM_AVAILABLE=true
+  echo "LM Studio: connected at ${BASE_URL}"
+fi
+
+if [ "$LM_AVAILABLE" = false ]; then
   echo ""
-  echo "⚠  WARNING: LM Studio server not reachable at ${BASE_URL}"
-  echo "   Start LM Studio → load a model → enable the REST API server."
-  echo "   Continuing anyway — you can still index files now and chat once it's up."
+  echo "LM Studio is not reachable at ${BASE_URL}."
+
+  # ── Create .env from example if missing ──
+  if [ ! -f .env ]; then
+    cp .env.example .env
+    echo ""
+    echo "  Created .env for you. Open it and add a cloud API key, then rerun."
+    echo ""
+    echo "  Edit the file:"
+    echo "    nano .env"
+    echo "    # or: code .env  |  vim .env  |  open -e .env"
+    echo ""
+    echo "  Uncomment ONE of these lines and fill in your key:"
+    echo "    OPENAI_API_KEY=sk-..."
+    echo "    ANTHROPIC_API_KEY=sk-ant-..."
+    echo ""
+    echo "  Then rerun:  ./start.sh $*"
+    exit 0
+  fi
+
+  # ── .env exists — check whether a key is actually set ──
+  HAS_KEY=false
+  if grep -qE "^OPENAI_API_KEY=.+" .env 2>/dev/null || \
+     grep -qE "^ANTHROPIC_API_KEY=.+" .env 2>/dev/null; then
+    HAS_KEY=true
+  fi
+
+  if [ "$HAS_KEY" = false ]; then
+    echo ""
+    echo "  .env exists but no API key is set."
+    echo ""
+    echo "  Open .env and uncomment + fill in one of:"
+    echo "    OPENAI_API_KEY=sk-..."
+    echo "    ANTHROPIC_API_KEY=sk-ant-..."
+    echo ""
+    echo "  Then rerun:  ./start.sh $*"
+    exit 0
+  fi
+
+  echo "  Cloud fallback active — key found in .env."
   echo ""
 fi
 
