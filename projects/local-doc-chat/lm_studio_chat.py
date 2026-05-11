@@ -66,18 +66,38 @@ class ChatLMStudio(BaseChatModel):
         return system_prompt, user_input
 
     def _parse_response(self, data: dict) -> str:
-        """Extract the assistant text from LM Studio's response, with fallbacks."""
-        # Standard OpenAI-style choices array
+        """Extract the assistant text from LM Studio's response.
+
+        LM Studio REST API returns:
+          {"output": [{"type": "reasoning", "content": "..."}, {"type": "message", "content": "..."}]}
+
+        We want only the "message" item, skipping "reasoning" (chain-of-thought).
+        """
+        # Standard OpenAI-style choices array (future-proofing)
         if "choices" in data and data["choices"]:
             choice = data["choices"][0]
             if "message" in choice:
                 return choice["message"].get("content", "")
             if "text" in choice:
                 return choice["text"]
-        # LM Studio REST-specific flat output key
+
+        # LM Studio REST API: output is a list of typed content items
         if "output" in data:
-            return data["output"]
-        # Last resort
+            output = data["output"]
+            if isinstance(output, str):
+                return output
+            if isinstance(output, list):
+                # Prefer the explicit "message" item
+                for item in output:
+                    if isinstance(item, dict) and item.get("type") == "message":
+                        return item.get("content", "")
+                # Fallback: join everything that isn't reasoning/thinking
+                return " ".join(
+                    item.get("content", "")
+                    for item in output
+                    if isinstance(item, dict) and item.get("type") not in ("reasoning", "thinking")
+                )
+
         return str(data)
 
     def _generate(
