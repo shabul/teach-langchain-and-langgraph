@@ -14,15 +14,14 @@ Flow:
 """
 from typing import TypedDict, Annotated, Literal
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, SystemMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
 load_dotenv()
 
-llm = ChatOpenAI(model="gpt-4o-mini")
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 
 Members = Literal["researcher", "writer"]
 Next = Literal["researcher", "writer", "FINISH"]
@@ -52,7 +51,6 @@ def supervisor(state: State) -> dict:
 
 # --- Workers ---
 def researcher(state: State) -> dict:
-    # In a real system this would call a search tool or RAG chain
     last_human = next(m for m in reversed(state["messages"]) if isinstance(m, HumanMessage))
     result = f"[Research] Found relevant info about: '{last_human.content}'. Key facts: it involves LangGraph multi-agent patterns."
     print(f"  [researcher] {result}")

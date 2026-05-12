@@ -5,10 +5,10 @@ Basic RAG pipeline:
   3. Embed + store in Chroma
   4. Retrieve + answer with LCEL
 
-pip install langchain-openai langchain-chroma
+pip install langchain-google-genai langchain-chroma
 """
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
@@ -31,8 +31,9 @@ raw_docs = [
 splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=20)
 docs = splitter.split_documents(raw_docs)
 
-# --- 3. Embed + store ---
-vectorstore = Chroma.from_documents(docs, embedding=OpenAIEmbeddings())
+# --- 3. Embed + store (gemini-embedding-001 supports proper batch embedding) ---
+embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+vectorstore = Chroma.from_documents(docs, embedding=embeddings)
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
 # --- 4. RAG chain ---
@@ -48,7 +49,7 @@ def format_docs(docs):
 rag_chain = (
     {"context": retriever | format_docs, "question": RunnablePassthrough()}
     | prompt
-    | ChatOpenAI(model="gpt-4o-mini")
+    | ChatGoogleGenerativeAI(model="gemini-2.0-flash")
     | StrOutputParser()
 )
 

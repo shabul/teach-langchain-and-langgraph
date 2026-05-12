@@ -1,11 +1,10 @@
 """
 Checkpointing — persist graph state across multiple invocations on the same thread.
 
-The graph counts how many times the user has sent a message and remembers it
-across calls, even though each .invoke() is a separate Python call.
+The graph remembers conversation history across calls via MemorySaver.
 """
 from typing import TypedDict, Annotated
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, BaseMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -14,7 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-model = ChatOpenAI(model="gpt-4o-mini")
+model = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 
 
 class State(TypedDict):

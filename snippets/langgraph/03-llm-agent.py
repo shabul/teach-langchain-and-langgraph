@@ -5,7 +5,7 @@ Tools available: calculator (just eval for demo, don't use in prod).
 """
 from dotenv import load_dotenv
 from typing import TypedDict, Annotated
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, BaseMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -25,7 +25,7 @@ def calculator(expression: str) -> str:
 
 
 tools = [calculator]
-model = ChatOpenAI(model="gpt-4o-mini").bind_tools(tools)
+model = ChatGoogleGenerativeAI(model="gemini-2.0-flash").bind_tools(tools)
 
 
 class State(TypedDict):

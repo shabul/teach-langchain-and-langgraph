@@ -9,7 +9,7 @@ Agents:
 """
 from typing import TypedDict, Annotated, Literal
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage, BaseMessage
 from langchain_core.tools import tool
 from langgraph.graph import StateGraph, START, END
@@ -18,10 +18,10 @@ from langgraph.prebuilt import ToolNode
 
 load_dotenv()
 
-llm = ChatOpenAI(model="gpt-4o-mini")
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash")
 
 
-# --- Handoff tools (each routes to a different agent) ---
+# --- Handoff tools ---
 @tool
 def transfer_to_tech() -> str:
     """Transfer the user to the technical support agent."""
@@ -51,7 +51,6 @@ def make_agent(system_prompt: str, tools: list):
         from langchain_core.messages import SystemMessage
         msgs = [SystemMessage(system_prompt)] + state["messages"]
         response = bound.invoke(msgs)
-        # detect which agent to hand off to based on tool calls
         next_agent = state["active_agent"]
         if response.tool_calls:
             name = response.tool_calls[0]["name"]

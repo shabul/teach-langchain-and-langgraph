@@ -6,7 +6,7 @@ Uses RunnableParallel to run retrieval once but feed two branches:
   - one that keeps raw docs for citation
 """
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
@@ -25,7 +25,9 @@ docs_data = [
 
 splitter = RecursiveCharacterTextSplitter(chunk_size=150, chunk_overlap=10)
 docs = splitter.split_documents(docs_data)
-vectorstore = Chroma.from_documents(docs, embedding=OpenAIEmbeddings())
+
+embeddings = GoogleGenerativeAIEmbeddings(model="models/gemini-embedding-001")
+vectorstore = Chroma.from_documents(docs, embedding=embeddings)
 retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
 
 prompt = ChatPromptTemplate.from_template(
@@ -41,14 +43,14 @@ def format_docs(docs: list[Document]) -> str:
 setup = RunnableParallel(
     context=retriever | format_docs,
     question=RunnablePassthrough(),
-    source_docs=retriever,          # raw docs kept for citation
+    source_docs=retriever,
 )
 
 answer_chain = (
     setup
     | RunnableParallel(
         answer={"context": lambda x: x["context"], "question": lambda x: x["question"]}
-                | prompt | ChatOpenAI(model="gpt-4o-mini") | StrOutputParser(),
+                | prompt | ChatGoogleGenerativeAI(model="gemini-2.0-flash") | StrOutputParser(),
         sources=lambda x: list({d.metadata["source"] for d in x["source_docs"]}),
     )
 )

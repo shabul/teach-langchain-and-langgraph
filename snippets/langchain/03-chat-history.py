@@ -2,7 +2,7 @@
 Multi-turn chat with message history using RunnableWithMessageHistory.
 """
 from dotenv import load_dotenv
-from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser
 from langchain_community.chat_message_histories import ChatMessageHistory
@@ -16,7 +16,7 @@ prompt = ChatPromptTemplate.from_messages([
     ("human", "{input}"),
 ])
 
-chain = prompt | ChatOpenAI(model="gpt-4o-mini") | StrOutputParser()
+chain = prompt | ChatGoogleGenerativeAI(model="gemini-2.0-flash") | StrOutputParser()
 
 # In-memory store keyed by session id
 store: dict[str, ChatMessageHistory] = {}
